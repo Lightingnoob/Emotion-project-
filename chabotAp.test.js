@@ -197,3 +197,22 @@ test('command-line checker parses options and prints a readable result', () => {
   assert.match(text, /MTH 1\s+TAKE THE COURSE - campus needs 4/);
   assert.match(text, /GE\/unit credit only/);
 });
+
+test('README example: UCSD Calc AB 3 with ASSIST MTH 1 -> MATH 20A', () => {
+  const articulation = { campuses: { san_diego: { 'MTH 1': ['MATH 20A'], 'CSCI 14': [] } } };
+  assert.deepEqual(validateArticulation(articulation, chabot, campusData), { unmatchedCourses: [] });
+  const result = evaluateApWaivers({
+    scores: [{ examId: 'ap:calculus_ab', score: 3 }],
+    ccWaivers: chabot, campusData,
+    target: { campusId: 'san_diego', contexts: ['campus_chart'], courseRoles: { 'STAT C1000': 'ge' } },
+    articulation,
+  });
+  const [mth1] = result.courses;
+  assert.equal(mth1.courseId, 'MTH 1');
+  assert.equal(mth1.recommendation, 'take_course_for_transfer');
+  assert.equal(mth1.requiredTransferScore, 4);
+  assert.deepEqual(mth1.targetCourses, ['MATH 20A']);
+  assert.ok(mth1.reasons.length > 0);
+  assert.deepEqual(completedWithWaivers(chabotCourses, [], result,
+    { mode: 'transfer', choices: { 'ap:united_states_history': 'HIS 8' } }), []);
+});

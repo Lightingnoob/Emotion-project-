@@ -190,19 +190,30 @@ Each Chabot course gets one recommendation:
 | `not_eligible` | Score below Chabot's minimum of 3. |
 
 ```js
-import { evaluateApWaivers, completedWithWaivers } from './apWaiver.js';
+import { evaluateApWaivers, completedWithWaivers, validateArticulation } from './apWaiver.js';
 
 const result = evaluateApWaivers({
   scores: [{ examId: 'ap:calculus_ab', score: 3 }],
-  ccWaivers, campusData,                      // the two data files above
-  target: { campusId: 'davis' },              // UCLA/Berkeley also need contexts, e.g. ['The College']
-  articulation,                               // optional: data/chabot_assist_articulation.json
+  ccWaivers: chabotApWaivers,            // data/chabot_ap_waivers.json
+  campusData: apCampusRequirements,      // data/ap_campus_score_requirements.json
+  target: {
+    campusId: 'san_diego',
+    contexts: ['campus_chart'],          // optional; UCLA/Berkeley need a college, e.g. 'The College'
+    courseRoles: { 'STAT C1000': 'ge' }, // optional per-student override
+  },
+  articulation: {                        // from ASSIST, per campus and per Chabot course
+    campuses: { san_diego: { 'MTH 1': ['MATH 20A'], 'CSCI 14': [] } },
+  },
 });
-// MTH 1 -> take_course_for_transfer, requiredTransferScore 4
+// result.courses[0] → { courseId: 'MTH 1', recommendation: 'take_course_for_transfer',
+//                       requiredTransferScore: 4, targetCourses: ['MATH 20A'], reasons: [...] }
 
-// Feed graph.js. 'transfer' mode keeps only transfer-safe waivers.
-// "One of" rows (HIS 1 or HIS 2, PHYS 4A or PHYS 7A) need an explicit choice.
+// Mark courses completed for graph.js (either/or rows need a choice):
 completedWithWaivers(courses, [], result, { mode: 'transfer', choices: { 'ap:united_states_history': 'HIS 8' } });
+
+// Check hand-entered ASSIST data first; throws on a bad shape or unknown campus,
+// and lists courses no AP rule waives (often a typo such as 'MATH 1' for 'MTH 1'):
+validateArticulation(articulation, chabotApWaivers, apCampusRequirements); // → { unmatchedCourses: [] }
 ```
 
 Command line:
