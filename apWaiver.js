@@ -23,6 +23,11 @@
  * uc_equivalents names the campus course(s) the waived course articulates to
  * (for example from ASSIST). Without it, any specific campus course award counts
  * and the result is flagged for manual review.
+ *
+ * Articulation: optional ASSIST data, per campus and per community college course.
+ *   { campuses: { san_diego: { 'MTH 1': ['MATH 20A'], 'CSCI 14': [] } } }
+ * It takes precedence over uc_equivalents. An empty list means ASSIST shows
+ * "no course articulated", which is reported as no_articulation.
  */
 import { topoOrder } from './graph.js';
 
@@ -176,6 +181,33 @@ function evaluateTransfer(entry, byExam, campus, contexts, targetCourses) {
     manualReview: reasons.length > 0, reasons };
 }
 
+/**
+ * Check ASSIST articulation data before use. Throws on a bad shape or unknown campus.
+ * Returns the courses that no AP rule waives: harmless (an agreement lists every
+ * major course), but useful for spotting a typo such as 'MATH 1' for 'MTH 1'.
+ */
+export function validateArticulation(articulation, ccWaivers, campusData) {
+  if (!articulation || typeof articulation.campuses !== 'object' || Array.isArray(articulation.campuses)) {
+    throw new TypeError('articulation must be { campuses: { [campusId]: { [courseId]: [campus course, ...] } } }.');
+  }
+  const campusIds = new Set(campusData.campuses.map(c => c.id));
+  const waived = new Set((ccWaivers?.rules ?? []).flatMap(r => r.waives ?? []));
+  const unmatchedCourses = new Set();
+  for (const [campusId, courses] of Object.entries(articulation.campuses)) {
+    if (!campusIds.has(campusId)) throw new Error(`Unknown campus in articulation: ${campusId}`);
+    if (!courses || typeof courses !== 'object' || Array.isArray(courses)) {
+      throw new TypeError(`articulation.campuses.${campusId} must map course ids to lists of campus courses.`);
+    }
+    for (const [courseId, codes] of Object.entries(courses)) {
+      if (!Array.isArray(codes) || codes.some(code => typeof code !== 'string' || !code.trim())) {
+        throw new TypeError(`Articulation for ${courseId} at ${campusId} must be a list of course codes ([] for none).`);
+      }
+      if (!waived.has(courseId)) unmatchedCourses.add(courseId);
+    }
+  }
+  return { unmatchedCourses: [...unmatchedCourses] };
+}
+
 function recommend(ccEligible, transfer, role, calGetc) {
   if (!ccEligible) return { recommendation: 'not_eligible', basis: 'community_college_minimum' };
   if (transfer.status === 'course_credit') return { recommendation: 'waive', basis: 'transfer_course_credit' };
@@ -193,7 +225,7 @@ function recommend(ccEligible, transfer, role, calGetc) {
  * be waived locally and whether that waiver holds up at the intended transfer campus.
  * @returns {{campusId: string, contexts: string[], exams: Object[], courses: Object[]}}
  */
-export function evaluateApWaivers({ scores, ccWaivers, campusData, target }) {
+export function evaluateApWaivers({ scores, ccWaivers, campusData, target, articulation }) {
   if (!campusData || !Array.isArray(campusData.campuses) || !Array.isArray(campusData.exams)) {
     throw new TypeError('campusData must be the ap_campus_score_requirements dataset.');
   }
@@ -210,6 +242,8 @@ export function evaluateApWaivers({ scores, ccWaivers, campusData, target }) {
   for (const [courseId, role] of Object.entries(courseRoles)) {
     if (!ROLES.has(role)) throw new Error(`Unknown role ${role} for ${courseId} in target.courseRoles.`);
   }
+  if (articulation !== undefined) validateArticulation(articulation, ccWaivers, campusData);
+  const campusArticulation = articulation?.campuses?.[campus.id] ?? {};
   const examIds = new Set(campusData.exams.map(e => e.id));
   const byExam = indexScores(scores, examIds);
   const waiverRules = compileWaivers(ccWaivers, examIds);
@@ -232,10 +266,12 @@ export function evaluateApWaivers({ scores, ccWaivers, campusData, target }) {
     // Below-minimum rules are reported too, so a student sees what a higher score would waive.
     for (const rule of [...eligibleRules, ...rules.filter(r => !eligibleRules.includes(r))]) {
       const ccEligible = eligibleRules.includes(rule);
-      const targetCourses = rule.uc_equivalents?.[campus.id] ?? null;
-      const courseTransfer = targetCourses
-        ? evaluateTransfer(entry, byExam, campus, contexts, targetCourses) : transfer;
       for (const courseId of rule.waives) {
+        const targetCourses = campusArticulation[courseId] ?? rule.uc_equivalents?.[campus.id] ?? null;
+        const courseTransfer = !targetCourses ? transfer
+          : targetCourses.length ? evaluateTransfer(entry, byExam, campus, contexts, targetCourses)
+          : { status: 'no_articulation', requiredScore: null, manualReview: true,
+              reasons: [`ASSIST lists no ${campus.id} course for ${courseId}; confirm whether the major needs it.`] };
         const key = `${entry.examId}|${courseId}`;
         if (seen.has(key)) continue;
         seen.add(key);

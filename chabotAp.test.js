@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { availableNow } from './graph.js';
-import { evaluateApWaivers, completedWithWaivers } from './apWaiver.js';
+import { evaluateApWaivers, completedWithWaivers, validateArticulation } from './apWaiver.js';
+import { parseArgs, main } from './check_ap_waivers.mjs';
 
 const load = path => JSON.parse(readFileSync(new URL(path, import.meta.url)));
 const campusData = load('./data/ap_campus_score_requirements.json');
@@ -148,4 +149,51 @@ test('graph.js: Davis Calc AB 3 clears MTH 1 locally but not for transfer', () =
   const transfer = completedWithWaivers(chabotCourses, [], result, { mode: 'transfer' });
   assert.deepEqual(transfer, []);
   assert.ok(!availableNow(chabotCourses, transfer).includes('MTH 2'));
+});
+
+// Articulation values below are test inputs, not verified ASSIST data.
+test('ASSIST articulation per course: UCSD MTH 1 -> MATH 20A needs a 4', () => {
+  const articulation = { campuses: { san_diego: { 'MTH 1': ['MATH 20A'] } } };
+  const at = score => course(evaluateApWaivers({ scores: [{ examId: 'ap:calculus_ab', score }],
+    ccWaivers: chabot, campusData, target: { campusId: 'san_diego' }, articulation }), 'MTH 1');
+  assert.equal(at(3).recommendation, 'take_course_for_transfer');
+  assert.equal(at(3).requiredTransferScore, 4);
+  assert.deepEqual(at(3).targetCourses, ['MATH 20A']);
+  assert.equal(at(4).recommendation, 'waive');
+  assert.ok(!at(4).reasons.some(r => /No articulated campus course/.test(r)));
+});
+
+test('articulation is per course, so "one of" alternatives can map differently', () => {
+  const articulation = { campuses: { berkeley: { 'PHYS 7A': ['PHYSICS 7A'], 'PHYS 4A': [] } } };
+  const result = evaluateApWaivers({ scores: [{ examId: 'ap:physics_c_mechanics', score: 5 }],
+    ccWaivers: chabot, campusData, target: { campusId: 'berkeley', contexts: ['College of Engineering'] }, articulation });
+  assert.equal(course(result, 'PHYS 7A').recommendation, 'waive');
+  assert.equal(course(result, 'PHYS 4A').transferStatus, 'no_articulation');
+  assert.equal(course(result, 'PHYS 4A').recommendation, 'verify_before_waiving');
+  assert.ok(course(result, 'PHYS 4A').reasons.some(r => /ASSIST lists no berkeley course/.test(r)));
+});
+
+test('validateArticulation rejects bad data and reports courses no AP rule waives', () => {
+  assert.deepEqual(validateArticulation({ campuses: { davis: { 'MTH 1': ['MAT 021A'], 'MATH 1': [] } } },
+    chabot, campusData).unmatchedCourses, ['MATH 1']);
+  assert.throws(() => validateArticulation({ campuses: { ucsf: {} } }, chabot, campusData), /Unknown campus/);
+  assert.throws(() => validateArticulation({ campuses: { davis: { 'MTH 1': 'MAT 021A' } } }, chabot, campusData), /list of course codes/);
+  assert.throws(() => validateArticulation({}, chabot, campusData), /campuses/);
+  const template = load('./data/chabot_assist_articulation.json');
+  assert.deepEqual(validateArticulation(template, chabot, campusData).unmatchedCourses, []);
+  for (const id of template.courses_to_check) assert.ok(chabot.rules.some(r => r.waives.includes(id)), id);
+});
+
+test('command-line checker parses options and prints a readable result', () => {
+  const opts = parseArgs(['--campus', 'los_angeles', '--context', 'The College', '--role', 'STAT C1000=ge',
+    '--date', 'macroeconomics=2020-05', 'macroeconomics=4', 'ap:statistics=3']);
+  assert.equal(opts.campusId, 'los_angeles');
+  assert.deepEqual(opts.courseRoles, { 'STAT C1000': 'ge' });
+  assert.deepEqual(opts.scores, [{ examId: 'ap:macroeconomics', score: 4, examDate: '2020-05' },
+    { examId: 'ap:statistics', score: 3 }]);
+  assert.throws(() => parseArgs(['calculus_ab=3']), /--campus/);
+  assert.throws(() => parseArgs(['--campus', 'davis', 'calculus_ab=A']), /1-5/);
+  const text = main(['--campus', 'davis', 'calculus_ab=3', 'environmental_science=3']);
+  assert.match(text, /MTH 1\s+TAKE THE COURSE - campus needs 4/);
+  assert.match(text, /GE\/unit credit only/);
 });
