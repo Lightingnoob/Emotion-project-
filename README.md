@@ -26,7 +26,11 @@ articulate-dag/
 ├── PREREQUISITE_REVIEW.md
 ├── prerequisite_validation.json
 ├── requirements-validation.txt
+├── catalog.test.js
+├── tools/parse_catalog.py           catalog PDF text -> JSON
 └── data/
+    ├── catalog/chabot_2025_2026_courses.json   every course in the 2025-2026 catalog
+    ├── catalog/chabot_2025_2026_pages.json     every catalog page as text
     ├── ap_campus_score_requirements.json   UC/CSUEB AP score rules
     ├── chabot_ap_waivers.json              Chabot 2025-2026 catalog AP chart
     ├── chabot_assist_articulation.json     template to fill from ASSIST
@@ -75,7 +79,7 @@ Open this folder in VS Code and run in its terminal:
 npm test
 ```
 
-Node.js 18 or newer is required for the test runner. No `npm install` is needed. `npm test` runs all 40 tests (14 graph, 12 AP waiver, 14 Chabot AP). Only the tests use Node APIs; `graph.js` can be imported directly into a browser module.
+Node.js 18 or newer is required for the test runner. No `npm install` is needed. `npm test` runs all 43 tests (14 graph, 12 AP waiver, 14 Chabot AP, 3 catalog). Only the tests use Node APIs; `graph.js` can be imported directly into a browser module.
 
 ## Input contract
 
@@ -209,3 +213,29 @@ node check_ap_waivers.mjs --campus los_angeles --context "The College" english_l
 ```
 
 Limits: UC course matches must come from ASSIST (the articulation template is empty until filled by hand). Without them, any campus course award counts and the result is flagged `manualReview`. A UC or CSU AP award never marks a Chabot course completed; only Chabot's own chart does. Course roles (`major_prep`/`ge`) are inferred defaults; override per student with `target.courseRoles`.
+
+## Chabot 2025-2026 catalog as JSON
+
+`data/catalog/chabot_2025_2026_courses.json` holds all 1,341 courses (1,093 credit, 96 noncredit, 152 apprenticeship) in 95 departments. Each record:
+
+```json
+{
+  "id": "MTH 2", "department": "MTH", "number": "2", "title": "Calculus II",
+  "type": "credit", "units": { "min": 5, "max": 5 }, "noncredit_hours": null, "page": 303,
+  "description": "Continuation of differential and integral calculus, ...",
+  "prerequisite": "MTH 1", "prerequisite_course_ids": ["MTH 1"],
+  "hours": { "lecture": { "min": 90, "max": 90 } }, "see_also": [], "formerly": null
+}
+```
+
+Optional fields when the catalog lists them: `corequisite`, `strongly_recommended`, `other_requirements` (unlabeled rules such as placement), each text field with a matching `*_course_ids` list. `*_course_ids` lists every course code mentioned, AND and OR alike, so read the text for the actual rule; these are not `graph.js` prereqs. Key records by `id` + `type`, since a department can list the same number as credit and noncredit.
+
+`data/catalog/chabot_2025_2026_pages.json` keeps every page's text with its page number and running header, for anything not in the course records (programs, policies, the AP chart).
+
+Regenerate from the PDF's text extraction:
+
+```bash
+python3 tools/parse_catalog.py 2025-2026_catalog_pdf.txt data/catalog
+```
+
+Note: some catalog prerequisites differ from the newer sources in `PREREQUISITE_REVIEW.md`. For example, the catalog still lists an algebra/trigonometry prerequisite for MTH 1, while the review records open access from Fall 2025.
