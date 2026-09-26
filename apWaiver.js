@@ -12,9 +12,13 @@
  *
  * Score entry:  { examId: 'ap:calculus_ab', score: 4, examDate?: 'YYYY-MM' }
  * CC waivers:   { default_min_score?: 3, rules: [{ exam_id, min_score?, waives: [courseId],
+ *                 choose_one?: true,            // waives lists alternatives ("HIS 1 or HIS 2")
  *                 transfer_role?: 'major_prep'|'ge'|'elective',
+ *                 cal_getc?: '2' | '3B or 4' | null,  // null = catalog lists no Cal-GETC area
+ *                 conditions?: ['Portfolio review required ...'],
  *                 uc_equivalents?: { [campusId]: ['MATH 20A', ...] } }] }
- * Target:       { campusId: 'san_diego', contexts?: ['campus_chart', 'all_colleges'] }
+ * Target:       { campusId: 'san_diego', contexts?: ['campus_chart', 'all_colleges'],
+ *                 courseRoles?: { 'STAT C1000': 'ge' } }  // per-student override of transfer_role
  *
  * uc_equivalents names the campus course(s) the waived course articulates to
  * (for example from ASSIST). Without it, any specific campus course award counts
@@ -83,6 +87,15 @@ function compileWaivers(ccWaivers, examIds) {
     }
     if (rule.transfer_role !== undefined && !ROLES.has(rule.transfer_role)) {
       throw new Error(`Unknown transfer_role ${rule.transfer_role} for ${rule.exam_id}.`);
+    }
+    if (rule.choose_one && rule.waives.length < 2) {
+      throw new Error(`choose_one rule for ${rule.exam_id} needs at least two alternative courses.`);
+    }
+    if (rule.cal_getc !== undefined && rule.cal_getc !== null && typeof rule.cal_getc !== 'string') {
+      throw new TypeError(`cal_getc for ${rule.exam_id} must be a string or null.`);
+    }
+    if (rule.conditions !== undefined && !Array.isArray(rule.conditions)) {
+      throw new TypeError(`conditions for ${rule.exam_id} must be an array of strings.`);
     }
     return { ...rule, min_score: rule.min_score ?? defaultMin };
   });
@@ -163,10 +176,11 @@ function evaluateTransfer(entry, byExam, campus, contexts, targetCourses) {
     manualReview: reasons.length > 0, reasons };
 }
 
-function recommend(ccEligible, transfer, role) {
+function recommend(ccEligible, transfer, role, calGetc) {
   if (!ccEligible) return { recommendation: 'not_eligible', basis: 'community_college_minimum' };
   if (transfer.status === 'course_credit') return { recommendation: 'waive', basis: 'transfer_course_credit' };
-  if (role === 'ge') return { recommendation: 'waive', basis: 'cal_getc_certification' };
+  // A GE role only helps when the exam actually carries a Cal-GETC area.
+  if (role === 'ge' && calGetc !== null) return { recommendation: 'waive', basis: 'cal_getc_certification' };
   if (role === 'elective') return { recommendation: 'waive', basis: 'elective_units' };
   if (role === 'major_prep' && (transfer.status === 'units_or_ge_only' || transfer.status === 'no_award_at_score')) {
     return { recommendation: 'take_course_for_transfer', basis: 'transfer_requires_higher_score_or_course' };
@@ -192,6 +206,10 @@ export function evaluateApWaivers({ scores, ccWaivers, campusData, target }) {
   for (const context of contexts) {
     if (!knownContexts.has(context)) throw new Error(`Unknown context for ${campus.id}: ${context}`);
   }
+  const courseRoles = target.courseRoles ?? {};
+  for (const [courseId, role] of Object.entries(courseRoles)) {
+    if (!ROLES.has(role)) throw new Error(`Unknown role ${role} for ${courseId} in target.courseRoles.`);
+  }
   const examIds = new Set(campusData.exams.map(e => e.id));
   const byExam = indexScores(scores, examIds);
   const waiverRules = compileWaivers(ccWaivers, examIds);
@@ -206,7 +224,9 @@ export function evaluateApWaivers({ scores, ccWaivers, campusData, target }) {
     exams.push({ examId: entry.examId, score: entry.score,
       communityCollege: { eligible: eligibleRules.length > 0,
         minScore: rules.length ? Math.min(...rules.map(r => r.min_score)) : null,
-        waives: [...new Set(eligibleRules.flatMap(r => r.waives))] },
+        waives: [...new Set(eligibleRules.flatMap(r => r.waives))],
+        calGetc: [...new Set(eligibleRules.map(r => r.cal_getc).filter(Boolean))],
+        conditions: [...new Set(rules.flatMap(r => r.conditions ?? []))] },
       transfer });
 
     // Below-minimum rules are reported too, so a student sees what a higher score would waive.
@@ -219,18 +239,41 @@ export function evaluateApWaivers({ scores, ccWaivers, campusData, target }) {
         const key = `${entry.examId}|${courseId}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const { recommendation, basis } = recommend(ccEligible, courseTransfer, rule.transfer_role);
+        const role = courseRoles[courseId] ?? rule.transfer_role;
+        const { recommendation, basis } = recommend(ccEligible, courseTransfer, role, rule.cal_getc);
         const reasons = [...courseTransfer.reasons];
+        let review = courseTransfer.manualReview;
         if (basis === 'cal_getc_certification') {
-          reasons.push('Cal-GETC area for this exam is not encoded here; confirm the area (no AP meets Area 1B).');
+          if (rule.cal_getc) {
+            reasons.push(`Counts toward Cal-GETC Area ${rule.cal_getc} (community college AP chart).`);
+            // "3B or 4": the certifying college picks the area, so confirm which one applies.
+            if (/\bor\b/.test(rule.cal_getc)) review = true;
+          } else {
+            reasons.push('Cal-GETC area for this exam is not encoded here; confirm the area (no AP meets Area 1B).');
+            review = true;
+          }
+        }
+        if (role === 'ge' && rule.cal_getc === null && ccEligible) {
+          reasons.push('The community college chart lists no Cal-GETC area for this exam, so it cannot clear a GE course.');
+        }
+        if (rule.choose_one) {
+          reasons.push(`Waives one of ${rule.waives.join(', ')}; pick one with a counselor (credit is awarded once).`);
+          review = true;
+        }
+        for (const condition of rule.conditions ?? []) {
+          reasons.push(condition);
+          review = true;
         }
         courses.push({ courseId, examId: entry.examId, score: entry.score,
           communityCollegeMinScore: rule.min_score, communityCollegeEligible: ccEligible,
-          transferRole: rule.transfer_role ?? null, targetCourses,
+          transferRole: role ?? null, targetCourses,
+          choiceGroup: rule.choose_one ? entry.examId : null,
+          alternatives: rule.choose_one ? [...rule.waives] : null,
+          calGetc: rule.cal_getc ?? null,
           recommendation, basis,
           requiredTransferScore: courseTransfer.requiredScore,
           transferStatus: courseTransfer.status,
-          manualReview: courseTransfer.manualReview || basis === 'cal_getc_certification',
+          manualReview: review,
           reasons });
       }
     }
@@ -242,8 +285,10 @@ export function evaluateApWaivers({ scores, ccWaivers, campusData, target }) {
  * Merge AP waivers into a completed list for graph.js (availableNow, criticalPath, validatePlan).
  * mode 'community_college': every locally waived course counts as completed.
  * mode 'transfer': only courses recommended 'waive' for the intended campus count.
+ * choices: { [examId]: courseId } picks the course for "one of" rules (e.g. HIS 1 or HIS 2).
+ * An eligible "one of" rule without a choice throws rather than guessing.
  */
-export function completedWithWaivers(courses, completed, evaluation, { mode = 'community_college' } = {}) {
+export function completedWithWaivers(courses, completed, evaluation, { mode = 'community_college', choices = {} } = {}) {
   if (mode !== 'community_college' && mode !== 'transfer') throw new Error(`Unknown mode: ${mode}`);
   if (!evaluation || !Array.isArray(evaluation.courses)) throw new TypeError('evaluation must come from evaluateApWaivers.');
   const ids = new Set(topoOrder(courses));
@@ -251,6 +296,16 @@ export function completedWithWaivers(courses, completed, evaluation, { mode = 'c
   for (const decision of evaluation.courses) {
     const counts = mode === 'transfer' ? decision.recommendation === 'waive' : decision.communityCollegeEligible;
     if (!counts) continue;
+    if (decision.choiceGroup) {
+      const chosen = choices[decision.choiceGroup];
+      if (chosen === undefined) {
+        throw new Error(`${decision.choiceGroup} waives one of ${decision.alternatives.join(', ')}; pass choices[${JSON.stringify(decision.choiceGroup)}].`);
+      }
+      if (!decision.alternatives.includes(chosen)) {
+        throw new Error(`Choice ${chosen} for ${decision.choiceGroup} is not one of ${decision.alternatives.join(', ')}.`);
+      }
+      if (chosen !== decision.courseId) continue;
+    }
     if (!ids.has(decision.courseId)) throw new Error(`Waived course ${decision.courseId} is not in the course list.`);
     done.add(decision.courseId);
   }
