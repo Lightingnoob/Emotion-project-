@@ -1,0 +1,211 @@
+# Articulate DAG project folder
+
+This folder includes the four graph functions, their tests, synthetic example data, and all four previously extracted Chabot-to-CSU East Bay major agreements. Original articulation mappings are preserved; the major files now include separately sourced Chabot prerequisite records.
+
+## Start in VS Code
+
+1. Extract this ZIP and open the `articulate-dag` folder in VS Code.
+2. Open Terminal > New Terminal.
+3. Run `npm test`. No dependency installation is needed for the tests.
+
+## Folder contents
+
+```text
+articulate-dag/
+├── graph.js
+├── graph.test.js
+├── apWaiver.js                      AP waiver eligibility (community college vs. transfer campus)
+├── apWaiver.test.js
+├── chabotAp.test.js                 real Chabot courses against UC campuses
+├── check_ap_waivers.mjs             command-line AP waiver checker
+├── ap_cc_waivers.example.json       synthetic demo waivers for courses.example.json
+├── check_prerequisites.py
+├── courses.example.json
+├── package.json
+├── README.md
+├── PREREQUISITE_REVIEW.md
+├── prerequisite_validation.json
+├── requirements-validation.txt
+└── data/
+    ├── ap_campus_score_requirements.json   UC/CSUEB AP score rules
+    ├── chabot_ap_waivers.json              Chabot 2025-2026 catalog AP chart
+    ├── chabot_assist_articulation.json     template to fill from ASSIST
+    ├── chabot_prerequisites.json           (not yet in this repo)
+    ├── computer_science.json               (not yet in this repo)
+    ├── computer_engineering.json           (not yet in this repo)
+    ├── biochemistry.json                   (not yet in this repo)
+    └── physics.json                        (not yet in this repo)
+```
+
+The prerequisite registry and the four major agreement files are not committed yet, so `python3 check_prerequisites.py` cannot run from this repo until they are added.
+
+| File | Major | Agreement year | JSON schema |
+|---|---|---|---|
+| `data/computer_science.json` | Computer Science | 2026-2027 | 1.0.0 |
+| `data/computer_engineering.json` | Computer Engineering | 2026-2027 | 1.0.0 |
+| `data/biochemistry.json` | Biochemistry — Chemistry Education concentration | 2025-2026 | 1.1.0 |
+| `data/physics.json` | Physics | 2026-2027 | 1.2.0 |
+
+## What is ready, and what remains
+
+The graph algorithms and tests are ready to run. The four major files contain articulation mappings and requirement groups, including AND/OR bundles and elective thresholds. Their `prerequisite_data` now contains rich, sourced rules, including user-clarified entries and policy caveats. The files cannot be passed directly to `graph.js`.
+
+For a real course schedule, review the user-clarified rules and remaining policy caveats, selected pathway and concurrent-enrollment constraints before adapting to the graph functions. Use `courses.example.json` for the included synthetic demo tests. The Biochemistry agreement is for 2025–2026; the other three are for 2026–2027.
+
+This package contains the code and data created so far. A frontend (`index.html`, Cytoscape rendering, and the semester board) has not yet been built.
+
+---
+
+# Articulate DAG: graph.js
+
+Four browser-compatible ES module exports, with no runtime dependencies:
+
+| Function | Returns |
+|---|---|
+| `topoOrder(courses)` | Course IDs in Kahn topological order |
+| `criticalPath(courses, completed = [])` | `{ path, semesters, semesterByCourse }` |
+| `availableNow(courses, completed = [])` | Available, unfinished course IDs |
+| `validatePlan(courses, plan)` | `{ valid, violations, unscheduled }` |
+
+## Run the tests
+
+Open this folder in VS Code and run in its terminal:
+
+```bash
+npm test
+```
+
+Node.js 18 or newer is required for the test runner. No `npm install` is needed. `npm test` runs all 40 tests (14 graph, 12 AP waiver, 14 Chabot AP). Only the tests use Node APIs; `graph.js` can be imported directly into a browser module.
+
+## Input contract
+
+```js
+const courses = [
+  { id: 'A', prereqs: [] },
+  { id: 'B', prereqs: ['A'] },
+  { id: 'C', prereqs: ['A'] },
+  { id: 'D', prereqs: ['B', 'C'] }
+];
+```
+
+This is a synthetic example, not verified Chabot catalog data. Optional metadata such as `title` and `units` is allowed and is not modified.
+
+- `id` must be unique. Every prerequisite must refer to an included course.
+- Every course must provide `prereqs`. Use `[]` only when no prerequisites is verified. Missing or null data throws an error.
+- `prereqs` means AND: every listed prerequisite is required.
+- These algorithms operate on selected courses. Resolve elective/OR options into an explicit selected pathway before calling them; the module deliberately rejects expression objects rather than flattening OR into AND.
+- `completed` accepts an array or Set of known IDs. Completion is accepted as an input fact; the user need not separately mark all ancestors of an already-completed course.
+- Each unfinished course takes one semester; prerequisites must finish in an earlier semester. The semester result is a lower bound that assumes unlimited parallel enrollment, availability every semester, and no unit cap. Corequisites, grades, placement rules, and equivalent-course credit decisions are outside this module.
+- Do not pass an ASSIST articulation graph as a prerequisite graph. The four extracted agreement files do not contain `prereqs`. Use the new sourced registry as research input; resolve its review items and richer constraints before adapting it for real scheduling. Articulation AND/OR rules and elective thresholds remain separate from these prerequisite algorithms.
+
+## Four small examples
+
+```js
+import {
+  topoOrder, criticalPath, availableNow, validatePlan
+} from './graph.js';
+
+const courses = [
+  { id: 'A', prereqs: [] },
+  { id: 'B', prereqs: ['A'] },
+  { id: 'C', prereqs: ['A'] },
+  { id: 'D', prereqs: ['B', 'C'] }
+];
+
+topoOrder(courses);
+// ['A', 'B', 'C', 'D']
+
+criticalPath(courses, ['A']);
+// {
+//   path: ['B', 'D'],
+//   semesters: 2,
+//   semesterByCourse: { A: 0, B: 1, C: 1, D: 2 }
+// }
+// B and C run in parallel. C -> D is an equally long path;
+// the function returns one deterministic critical path.
+
+availableNow(courses, ['A']);
+// ['B', 'C']
+
+validatePlan(courses, [['A'], ['B', 'C'], ['D']]);
+// { valid: true, violations: [], unscheduled: [] }
+
+validatePlan(courses, [['A', 'B'], ['C', 'D']]);
+// valid: false
+// B requires A before semester 1.
+// D requires C before semester 2.
+```
+
+Completed courses can be supplied to the plan checker:
+
+```js
+validatePlan(courses, {
+  completed: ['A'],
+  semesters: [['B', 'C'], ['D']]
+});
+// { valid: true, violations: [], unscheduled: [] }
+```
+
+Plan semesters are numbered from 1 in violation objects. Empty semesters are allowed. A valid partial plan can still have `unscheduled` courses; `valid` does not mean degree completion. Course IDs in `violations` can be used to mark semester-board cards red.
+
+## Error handling
+
+Invalid course data or a cycle throws an Error. A cycle error has `code === 'CYCLE_DETECTED'` and `blockedCourseIds`; that list may include descendants blocked by the cycle, not just cycle members. Invalid plan shape also throws. For a well-formed plan, unknown scheduled IDs, duplicates, already-completed courses, and unmet prerequisites are returned as violation objects.
+
+All functions reject cyclic graphs. Kahn's algorithm and the course-graph computations take O(V + E) time. Plan validation additionally scans scheduled courses and their prerequisites. Inputs are never mutated.
+
+## Files
+
+- `graph.js`: the four functions and shared validation helpers.
+- `graph.test.js`: 14 executable tests, including a small example for each function.
+- `courses.example.json`: synthetic demo data.
+- `package.json`: ES module and test-runner configuration.
+
+
+## Prerequisite research update (2026-09-24)
+
+See `PREREQUISITE_REVIEW.md` for all 35 Chabot courses and the screenshot clarifications. Each major JSON now embeds its course records in `prerequisite_data.records`; the shared `data/chabot_prerequisites.json` adds supporting courses and explicit semantics. These rich records are not direct input to the AND-only graph functions. Original articulation mappings and agreement years are preserved. Run `python3 check_prerequisites.py` after installing the version in `requirements-validation.txt` for structural checks.
+
+Three previously ambiguous rules (CHEM 1A, BIOS 21B, BIOS 21C) now use the user-supplied screenshot groupings, labeled `user_clarified`. This is not independent official verification. CHEM 201 policy applicability remains open.
+
+
+## AP waivers (apWaiver.js)
+
+Two separate decisions are made for every AP score:
+
+1. **Chabot:** a score of 3, 4 or 5 waives the course listed in the 2025-2026 catalog AP chart (`data/chabot_ap_waivers.json`) and counts toward the listed Cal-GETC area.
+2. **Transfer campus:** whether the intended UC (or CSU East Bay) awards credit for that course at that score (`data/ap_campus_score_requirements.json`). UC minimums are often higher.
+
+Each Chabot course gets one recommendation:
+
+| Recommendation | Meaning |
+|---|---|
+| `waive` | Safe to skip for this campus (campus course credit, or a GE/elective role covered by Cal-GETC). |
+| `take_course_for_transfer` | Chabot waives it, but the campus needs a higher score; `requiredTransferScore` says which. |
+| `verify_before_waiving` | Not resolvable from the data (no campus rule, no articulation, no Cal-GETC area). |
+| `not_eligible` | Score below Chabot's minimum of 3. |
+
+```js
+import { evaluateApWaivers, completedWithWaivers } from './apWaiver.js';
+
+const result = evaluateApWaivers({
+  scores: [{ examId: 'ap:calculus_ab', score: 3 }],
+  ccWaivers, campusData,                      // the two data files above
+  target: { campusId: 'davis' },              // UCLA/Berkeley also need contexts, e.g. ['The College']
+  articulation,                               // optional: data/chabot_assist_articulation.json
+});
+// MTH 1 -> take_course_for_transfer, requiredTransferScore 4
+
+// Feed graph.js. 'transfer' mode keeps only transfer-safe waivers.
+// "One of" rows (HIS 1 or HIS 2, PHYS 4A or PHYS 7A) need an explicit choice.
+completedWithWaivers(courses, [], result, { mode: 'transfer', choices: { 'ap:united_states_history': 'HIS 8' } });
+```
+
+Command line:
+
+```bash
+node check_ap_waivers.mjs --campus davis calculus_ab=3 psychology=4
+node check_ap_waivers.mjs --campus los_angeles --context "The College" english_language_and_composition=3
+```
+
+Limits: UC course matches must come from ASSIST (the articulation template is empty until filled by hand). Without them, any campus course award counts and the result is flagged `manualReview`. A UC or CSU AP award never marks a Chabot course completed; only Chabot's own chart does. Course roles (`major_prep`/`ge`) are inferred defaults; override per student with `target.courseRoles`.
