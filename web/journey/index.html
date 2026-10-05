@@ -3,40 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Transfer Journey</title>
+  <title>SEPath</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800;900&family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="journey.css">
 </head>
 <!-- data-next: the page to open after the ride fades out (receives ?college=&target=) -->
 <body data-next="plan.html">
-  <!-- Step 1: where the student is starting from -->
-  <section id="intake" class="screen is-active" aria-labelledby="intake-title">
-    <div class="intake-bg" aria-hidden="true"></div>
-    <form id="intake-form" class="intake-card" autocomplete="off" novalidate>
-      <p class="eyebrow">Platform 1 · Departures</p>
-      <h1 id="intake-title">Where does your journey begin?</h1>
-      <p class="lede">Tell us which community college you attended and we'll issue your ticket.</p>
-
-      <label for="college">Community college you attended</label>
-      <input id="college" name="college" list="cc-list" placeholder="e.g. Chabot College" required>
-      <p class="field-error" id="college-error" role="alert" hidden>Please enter your community college.</p>
-
-      <label for="target">Where do you want to transfer? <span class="optional">(optional)</span></label>
-      <input id="target" name="target" list="uni-list" placeholder="e.g. UC Berkeley">
-
-      <button type="submit" class="board-btn">Get my ticket <span aria-hidden="true">→</span></button>
-    </form>
-    <datalist id="cc-list"></datalist>
-    <datalist id="uni-list"></datalist>
-  </section>
-
   <!-- Step 2: the animated journey -->
-  <section id="journey" class="screen" aria-label="Your transfer journey" aria-live="polite">
+  <section id="journey" class="screen is-active" aria-label="Your transfer journey">
     <div id="viewport">
       <div id="zoomer">
         <canvas id="station" width="1448" height="1086" aria-hidden="true"></canvas>
+        <div id="tint" aria-hidden="true"></div>
         <div id="ticket" class="ticket" role="img" aria-label="">
           <div class="t-head">
             <span class="t-logo" aria-hidden="true">
@@ -64,7 +44,24 @@
       </div>
       <canvas id="tracks" aria-hidden="true"></canvas>
       <div id="flash" aria-hidden="true"></div>
-      <button type="button" id="skip" class="skip-btn">Skip ▸▸</button>
+      <!-- Landing: the SEPath start page over the blurred station. The ticket shows through #ticket-slot. -->
+      <div id="landing">
+        <form id="landing-form" class="board" autocomplete="off" novalidate>
+          <h1 class="brand">SEPath</h1>
+          <p class="tagline">Your Student Educational Plan, from community college to transfer.</p>
+          <h2 class="plan-h">Build your transfer plan</h2>
+          <p class="pitch">Pick where you are and where you’re headed, add what you’ve finished, and we’ll map the fastest path to transfer.</p>
+          <div class="search">
+            <svg class="search-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+            <input id="college" name="college" list="cc-list" placeholder="Search your community college" aria-label="Community college you attended" required>
+          </div>
+          <p class="field-error" id="college-error" role="alert" hidden>Enter your community college to start.</p>
+          <button type="submit" class="plan-btn" id="start-btn">Start planning <span aria-hidden="true">→</span></button>
+          <div id="ticket-slot" aria-hidden="true"></div>
+        </form>
+        <datalist id="cc-list"></datalist>
+      </div>
+      <button type="button" id="skip" class="skip-btn" hidden>Skip ▸▸</button>
     </div>
   </section>
 

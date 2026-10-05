@@ -1,4 +1,4 @@
-/* Transfer journey: intake form -> ticket -> train arrives -> doors open -> zoom through the door
+/* Transfer journey: SEPath landing (blurred station + live ticket) -> focus -> train arrives -> doors open -> zoom through the door
  * -> ride forward along the tracks. The station is drawn on a canvas in the 1448x1086 space of the
  * source photos; the track ride is a WebGL shader that pushes the camera toward the vanishing point. */
 (() => {
@@ -30,17 +30,11 @@
     "San Diego Mesa College": "San Diego", "Grossmont College": "El Cajon", "Southwestern College": "Chula Vista",
     "Butte College": "Oroville", "Shasta College": "Redding",
   };
-  const UNIVERSITIES = [
-    "UC Berkeley", "UCLA", "UC San Diego", "UC Davis", "UC Irvine", "UC Santa Barbara", "UC Santa Cruz",
-    "UC Riverside", "UC Merced", "Cal State East Bay", "San José State University", "San Francisco State University",
-    "Cal Poly San Luis Obispo", "Cal Poly Pomona", "Sacramento State", "CSU Long Beach", "CSU Fullerton",
-    "San Diego State University", "Stanford University", "USC",
-  ];
 
   // ------------------------------------------------------------------ timeline (seconds)
   const T = {
-    fadeIn: [0, 0.8],
-    ticketIn: [0.7, 2.3],
+    uiOut: [0, 0.9],         // the SEPath form (and its sky tint) fades away
+    ticketIn: [0.35, 2.3],   // the ticket glides from under the form to its spot on the platform
     punch: 2.6,
     train: [2.8, 7.2],
     settle: [7.2, 7.6],
@@ -64,7 +58,8 @@
   const DOOR_FOCUS = { x: 891, y: 640 };
   const SIGN = { x: 510, y: 405, w: 144, h: 33 };
   const TRAIN_START_OFFSET = 2750;
-  const TICKET_REST = { x: 560, y: 712, rot: -4 };
+  const TICKET_REST = { x: 545, y: 735, rot: -4 };
+  const TICKET_W = 576, TICKET_H = 330;
 
   // track photo geometry
   const TRACK_IMG = { w: 1672, h: 941 };
@@ -107,26 +102,26 @@
 
   // ------------------------------------------------------------------ DOM
   const $ = (id) => document.getElementById(id);
-  const intake = $("intake"), journey = $("journey");
-  const form = $("intake-form"), collegeInput = $("college"), targetInput = $("target"), collegeError = $("college-error");
-  const zoomer = $("zoomer"), stationCanvas = $("station"), sctx = stationCanvas.getContext("2d");
+  const journey = $("journey"), landing = $("landing"), slot = $("ticket-slot"), startBtn = $("start-btn");
+  const form = $("landing-form"), collegeInput = $("college"), collegeError = $("college-error");
+  const tint = $("tint"), zoomer = $("zoomer"), stationCanvas = $("station"), sctx = stationCanvas.getContext("2d");
   const ticket = $("ticket"), flash = $("flash"), tracksCanvas = $("tracks");
 
   $("cc-list").innerHTML = Object.keys(COLLEGES).map((c) => `<option value="${c}"></option>`).join("");
-  $("uni-list").innerHTML = UNIVERSITIES.map((u) => `<option value="${u}"></option>`).join("");
 
   // ------------------------------------------------------------------ ticket
-  function fillTicket(college, target) {
+  const ticketNo = "No. " + String(10000 + Math.floor(Math.random() * 89999));
+  function fillTicket(college) {
     const now = new Date();
     const y = now.getFullYear(), m = String(now.getMonth() + 1).padStart(2, "0"), d = String(now.getDate()).padStart(2, "0");
-    $("t-from").textContent = college;
+    $("t-from").textContent = college || "Your college";
     $("t-to").textContent = "?";            // the destination stays open on the ticket
     $("t-city").textContent = COLLEGES[college] || "";
     $("t-valid").textContent = `${y}年${m}月${d}日から2日間有効`;
     $("t-date").innerHTML = `${y}.${m}.${d}<br>60023-01`;
-    $("t-no").textContent = "No. " + String(10000 + Math.floor(Math.random() * 89999));
+    $("t-no").textContent = ticketNo;
     ticket.setAttribute("aria-label", `Train ticket from ${college}, destination open`);
-    ticket.classList.remove("punched");
+    fitText($("t-from"), 34, 18);
   }
 
   // shrink a single-line field until it fits its box (ticket fields are fixed-size)
@@ -143,37 +138,43 @@
   function ticketRest() {
     const s0 = Math.max(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
     const visibleW = window.innerWidth / s0;
-    const fit = Math.min(1, (visibleW * 0.9) / 470);
+    const fit = Math.min(0.8, (visibleW * 0.9) / TICKET_W);   // smaller on the platform so the train stays visible
     return visibleW < 1150 ? { x: STAGE_W / 2, y: TICKET_REST.y, rot: TICKET_REST.rot, fit } : { ...TICKET_REST, fit };
+  }
+
+  // the ticket's pose (stage coords + absolute scale) when it sits in the landing page's slot
+  function landPose() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const s0 = Math.max(vw / STAGE_W, vh / STAGE_H);
+    const r = slot.getBoundingClientRect();
+    const tx = vw / 2 - (STAGE_W / 2) * s0, ty = vh / 2 - (STAGE_H / 2) * s0;
+    return { x: (r.left + r.width / 2 - tx) / s0, y: (r.top + r.height / 2 - ty) / s0, rot: 0, sc: r.width / (TICKET_W * s0) };
+  }
+  let LAND = null;    // captured when Start planning is pressed
+
+  function setTicket(x, y, rot, sc, rx = 0, op = 1) {
+    ticket.style.transform =
+      `translate(${x - TICKET_W / 2}px, ${y - TICKET_H / 2}px) perspective(900px) rotateX(${rx}deg) rotate(${rot}deg) scale(${sc})`;
+    ticket.style.opacity = op;
   }
 
   function placeTicket(t) {
     const REST = ticketRest();
-    let x, y, rot, rx = 0, s = 1, op = 1;
-    if (t < T.ticketIn[0]) { op = 0; x = 1650; y = -300; rot = 30; }
-    else if (t < T.ticketIn[1]) {
-      const u = prog(t, T.ticketIn), p = easeOutCubic(u);
-      x = lerp(1650, REST.x, p);
-      y = lerp(-300, REST.y, p) - Math.sin(u * Math.PI) * 120;
-      rot = REST.rot + 36 * (1 - p) + 7 * Math.sin(u * 15) * Math.pow(1 - u, 2);
-      rx = 55 * (1 - p);
-      s = lerp(0.65, 1, p);
-      op = clamp(u / 0.15, 0, 1);
+    const L = LAND || landPose();
+    if (t < T.ticketIn[0]) {
+      setTicket(L.x, L.y, 0, L.sc);
+    } else if (t < T.ticketIn[1]) {
+      const u = prog(t, T.ticketIn), p = easeInOutCubic(u);
+      setTicket(lerp(L.x, REST.x, p), lerp(L.y, REST.y, p) - Math.sin(u * Math.PI) * 40,
+        lerp(0, REST.rot, p) + 3 * Math.sin(u * Math.PI), lerp(L.sc, REST.fit, p), 8 * Math.sin(u * Math.PI));
     } else if (t < T.ticketToDoor[0]) {
-      x = REST.x;
-      y = REST.y + Math.sin((t - T.ticketIn[1]) * 1.6) * 4;
-      rot = REST.rot + Math.sin((t - T.ticketIn[1]) * 1.1) * 0.7;
+      setTicket(REST.x, REST.y + Math.sin((t - T.ticketIn[1]) * 1.6) * 4,
+        REST.rot + Math.sin((t - T.ticketIn[1]) * 1.1) * 0.7, REST.fit);
     } else {
       const u = prog(t, T.ticketToDoor), p = easeInOutCubic(u);
-      x = lerp(REST.x, DOOR_FOCUS.x, p);
-      y = lerp(REST.y, DOOR_FOCUS.y - 20, p) - Math.sin(u * Math.PI) * 90;
-      rot = lerp(REST.rot, 0, p);
-      s = lerp(1, 0.08, p);
-      op = 1 - clamp((u - 0.6) / 0.4, 0, 1);
+      setTicket(lerp(REST.x, DOOR_FOCUS.x, p), lerp(REST.y, DOOR_FOCUS.y - 20, p) - Math.sin(u * Math.PI) * 90,
+        lerp(REST.rot, 0, p), lerp(1, 0.08, p) * REST.fit, 0, 1 - clamp((u - 0.6) / 0.4, 0, 1));
     }
-    ticket.style.transform =
-      `translate(${x - 235}px, ${y - 165}px) perspective(900px) rotateX(${rx}deg) rotate(${rot}deg) scale(${s * REST.fit})`;
-    ticket.style.opacity = op;
     if (t >= T.punch && !ticket.classList.contains("punched")) ticket.classList.add("punched");
   }
 
@@ -280,11 +281,6 @@
       ctx.drawImage(A.doorL, DOOR.x - dx, DOOR.y);
       ctx.drawImage(A.doorR, DOOR.split + dx, DOOR.y);
       ctx.restore();
-    }
-    const fade = 1 - prog(t, T.fadeIn);
-    if (fade > 0) {
-      ctx.fillStyle = `rgba(0,0,0,${fade})`;
-      ctx.fillRect(0, 0, STAGE_W, STAGE_H);
     }
   }
 
@@ -418,6 +414,7 @@
 
   function frame(now) {
     const t = (now - startTime) / 1000;
+    applyFocus(t);
     if (t < T.zoom[1]) {
       zoomer.style.visibility = "visible";
       placeStage(t);
@@ -437,6 +434,24 @@
     else goToNextPage();
   }
 
+  // landing page: the station opens blurred and comes into focus behind the form
+  const BLUR_PX = 9;                 // in stage px (the canvas is scaled to the screen)
+  const FOCUS = [0.5, 3.0];          // seconds after the station image is ready
+  function setFocus(u) {
+    stationCanvas.style.filter = u >= 1 ? "none"
+      : `blur(${(BLUR_PX * (1 - u)).toFixed(2)}px) brightness(${lerp(0.85, 1, u).toFixed(3)}) saturate(${lerp(1.15, 1, u).toFixed(3)})`;
+  }
+
+  // once the journey starts: the form and the sky tint fade out
+  function applyFocus(t) {
+    setFocus(1);
+    stationCanvas.style.opacity = 1;
+    const o = 1 - easeInOutSine(prog(t, T.uiOut));
+    landing.style.opacity = o;
+    tint.style.opacity = o;
+    landing.classList.toggle("is-gone", o <= 0);
+  }
+
   // After the fade to black, continue to the next page (set data-next on <body>), passing what the
   // student entered both in the URL and in sessionStorage.
   function goToNextPage() {
@@ -445,7 +460,6 @@
     const next = new URL(document.body.dataset.next || "plan.html", window.location.href);
     if (next.origin !== window.location.origin) return;     // only same-site pages
     next.searchParams.set("college", state.college);
-    if (state.target) next.searchParams.set("target", state.target);
     try { sessionStorage.setItem("sepath.journey", JSON.stringify(state)); } catch (e) { /* storage blocked */ }
     window.location.assign(next.href);
   }
@@ -454,15 +468,33 @@
     cancelAnimationFrame(rafId);
     handedOff = false;
     ticket.classList.remove("punched");
+    $("skip").hidden = false;
     startTime = performance.now() - fromTime * 1000;
     rafId = requestAnimationFrame(frame);
   }
 
-  async function startJourney(college, target) {
-    state = { college, target };
-    fillTicket(college, target);
-    intake.classList.remove("is-active");
-    journey.classList.add("is-active");
+  // ------------------------------------------------------------------ landing page
+  let landingRaf = 0, ready = false, readyAt = 0;
+
+  function landingFrame(now) {
+    placeStage(0);
+    placeTicket(0);
+    // everything appears together once the station image is ready, then the station comes into focus
+    const lt = ready ? (now - readyAt) / 1000 : 0;
+    const show = ready ? (reduceMotion ? 1 : easeInOutSine(prog(lt, [0, 0.7]))) : 0;
+    landing.style.opacity = show;
+    ticket.style.opacity = show;
+    stationCanvas.style.opacity = show;
+    tint.style.opacity = show;
+    if (ready) setFocus(reduceMotion ? 1 : easeInOutSine(prog(lt, FOCUS)));
+    landingRaf = requestAnimationFrame(landingFrame);
+  }
+
+  async function init() {
+    fillTicket("");
+    landing.style.opacity = 0;
+    setFocus(0);
+    landingRaf = requestAnimationFrame(landingFrame);
     try {
       A = await loadAssets();
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
@@ -470,15 +502,32 @@
       console.error(err);
       return;
     }
-    fitText($("t-from"), 29, 16);
     // the train keeps the photo's own destination sign ("普通 Target college"); pass a string here to repaint it
     const signText = null;
     closedImg = withSign(A.closed, signText);
     openImg = withSign(A.open, signText);
     stripImg = withSign(A.strip, signText, SEG_X0, STRIP_TOP);
-    if (!gl) {
-      try { glReady = initGL(); } catch (err) { console.error(err); glReady = false; }
-    }
+    drawStation(0);
+    fillTicket(collegeInput.value.trim());
+    try { glReady = initGL(); } catch (err) { console.error(err); glReady = false; }
+    readyAt = performance.now();
+    ready = true;
+  }
+
+  // the ticket updates as the student types
+  collegeInput.addEventListener("input", () => {
+    fillTicket(collegeInput.value.trim());
+    if (collegeInput.value.trim()) { collegeInput.removeAttribute("aria-invalid"); collegeError.hidden = true; }
+  });
+
+  async function startJourney(college) {
+    state = { college };
+    fillTicket(college);
+    startBtn.disabled = true;
+    while (!ready) await new Promise((r) => setTimeout(r, 50));
+    collegeInput.blur();
+    LAND = landPose();
+    cancelAnimationFrame(landingRaf);
     play(0);
   }
 
@@ -491,19 +540,19 @@
       collegeInput.focus();
       return;
     }
-    collegeInput.removeAttribute("aria-invalid");
-    collegeError.hidden = true;
-    startJourney(college, targetInput.value.trim());
+    startJourney(college);
   });
 
   // skipping still ends with the short fade so the hand-off never jumps
   $("skip").addEventListener("click", () => play(Math.max(T.fadeOut[1] - 1.0, 0)));
   window.addEventListener("resize", () => {
-    if (!journey.classList.contains("is-active") || !A) return;
+    if (!A || !state) return;
     const t = (performance.now() - startTime) / 1000;
     if (t >= END) { if (t >= T.ride[0]) drawTracks(END); else placeStage(t); }
   });
 
   // expose for automated checks: render a specific moment without waiting
-  window.__journey = { T, END, seek: (t) => play(t), hold: () => { handedOff = true; } };
+  window.__journey = { T, END, seek: (t) => { LAND = LAND || landPose(); cancelAnimationFrame(landingRaf); play(t); }, hold: () => { handedOff = true; } };
+
+  init();
 })();
