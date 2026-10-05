@@ -42,12 +42,12 @@
     ticketToDoor: [8.9, 10.2],
     zoom: [9.6, 12.0],
     flashIn: [11.2, 12.0],
-    ride: [12.0, 25.0],
+    ride: [12.0, 23.0],
     flashOut: [12.0, 12.9],
     steer: [14.6, 20.2],
-    fadeOut: [20.8, 25.4],
+    fadeOut: [21.4, 22.7],   // quick fade to black, then straight on to the planner
   };
-  const END = T.fadeOut[1] + 0.35;            // hold on black briefly, then hand off to the next page
+  const END = T.fadeOut[1] + 0.15;            // hold on black briefly, then hand off to the next page
   // which branch the switch sends us down: -1 = left (toward the sea), +1 = right (along the platform)
   const ROUTE = -1;
 

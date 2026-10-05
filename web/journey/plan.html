@@ -1,64 +1,406 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Transfer Plan</title>
-  <!-- Stand-in for the real planner page: the journey hands off here after its fade to black.
-       Point <body data-next> in index.html at the real page; it receives ?college=&target=. -->
+  <title>SEPath · Plan</title>
+  <!-- Look-alike of the SEPath planner so the journey has somewhere to land. The journey opens this page
+       with ?college=...; point <body data-next> in index.html at the real planner to replace it. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --bg: #07060b; --card: rgba(30, 22, 44, 0.78); --line: rgba(255, 255, 255, 0.12); --ink: #f3eefb; --muted: #b7accb; --accent: #ff9a4a; }
+    :root {
+      --bg: #0b0a12;
+      --bar: rgba(30, 10, 40, 0.72);
+      --card-top: rgba(122, 38, 104, 0.62);
+      --card-bot: rgba(18, 18, 30, 0.9);
+      --card-line: rgba(255, 255, 255, 0.16);
+      --field: rgba(18, 16, 30, 0.72);
+      --field-line: rgba(255, 255, 255, 0.1);
+      --panel: rgba(255, 255, 255, 0.035);
+      --ink: #f4f1fb;
+      --muted: #b8b2c8;
+      --faint: #8d879f;
+      --accent: #c08bff;
+      --brand-a: #ff4fa3;
+      --brand-b: #8b5cf6;
+      --seg-on: #3a3f52;
+      --glow-tl: rgba(190, 40, 150, 0.55);
+      --glow-bl: rgba(20, 150, 110, 0.55);
+    }
+    [data-theme="light"] {
+      --bg: #f6f3fb;
+      --bar: rgba(255, 255, 255, 0.8);
+      --card-top: rgba(250, 220, 245, 0.95);
+      --card-bot: rgba(255, 255, 255, 0.95);
+      --card-line: rgba(80, 40, 110, 0.15);
+      --field: #fff;
+      --field-line: rgba(60, 30, 90, 0.18);
+      --panel: rgba(120, 60, 160, 0.05);
+      --ink: #1d1530;
+      --muted: #5d5572;
+      --faint: #7b7390;
+      --accent: #7c3aed;
+      --seg-on: #e7defa;
+      --glow-tl: rgba(240, 120, 200, 0.35);
+      --glow-bl: rgba(60, 200, 150, 0.3);
+    }
     * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    html, body { margin: 0; min-height: 100%; }
     body {
       min-height: 100vh;
+      color: var(--ink);
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 15px;
+      background: var(--bg);
+    }
+    /* page glow lives on a fixed layer so it covers the whole screen at any scroll position */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
       background:
-        radial-gradient(ellipse at 50% -10%, rgba(255, 130, 60, 0.28), transparent 60%),
-        radial-gradient(ellipse at 50% 120%, rgba(60, 40, 110, 0.5), transparent 60%),
+        radial-gradient(ellipse 55% 45% at 10% 8%, var(--glow-tl), transparent 70%),
+        radial-gradient(ellipse 45% 40% at 100% 20%, rgba(120, 40, 170, 0.35), transparent 70%),
+        radial-gradient(ellipse 55% 45% at 0% 100%, var(--glow-bl), transparent 70%),
+        radial-gradient(ellipse 45% 40% at 100% 100%, rgba(30, 120, 90, 0.35), transparent 70%),
         var(--bg);
     }
+
     /* arrive from black, matching the end of the ride */
-    main { width: min(760px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 40px; opacity: 0; transform: translateY(10px); animation: arrive 1.4s 0.15s ease-out forwards; }
-    @keyframes arrive { to { opacity: 1; transform: none; } }
-    @media (prefers-reduced-motion: reduce) { main { animation-duration: 0.01s; } }
-    .eyebrow { margin: 0; text-align: center; letter-spacing: 0.14em; text-transform: uppercase; font-size: 13px; color: var(--accent); }
-    h1 { margin: 6px 0 4px; text-align: center; font-size: clamp(26px, 5vw, 38px); }
-    .lede { margin: 0 0 28px; text-align: center; color: var(--muted); }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
-    .card h2 { margin: 0 0 12px; font-size: 16px; }
-    .chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: rgba(255, 154, 74, 0.14); border: 1px solid rgba(255, 154, 74, 0.45); font-weight: 600; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    .muted { color: var(--muted); font-size: 14px; }
-    a { color: var(--accent); }
+    .arrive { animation: arrive 0.8s ease-out both; }
+    @keyframes arrive { from { opacity: 0; } to { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .arrive { animation: none; } }
+
+    .topbar { position: sticky; top: 0; z-index: 5; background: var(--bar); backdrop-filter: blur(10px); border-bottom: 1px solid var(--card-line); }
+    .topbar-in { max-width: 1364px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+    .logo { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: linear-gradient(135deg, var(--brand-a), var(--brand-b)); box-shadow: 0 4px 16px rgba(200, 60, 180, 0.4); }
+    .logo svg { width: 26px; height: 26px; color: #fff; }
+    .wordmark { font-size: 21px; font-weight: 600; background: linear-gradient(90deg, #f6b8ff, #8ae6ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .theme-btn { margin-left: auto; width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--card-line); background: rgba(0, 0, 0, 0.25); cursor: pointer; display: grid; place-items: center; }
+    .theme-btn svg { width: 22px; height: 22px; }
+
+    main { max-width: 1364px; margin: 38px auto 60px; padding: 0 16px; }
+    .card {
+      border: 1px solid var(--card-line);
+      border-radius: 18px;
+      padding: 36px 38px 40px;
+      background: linear-gradient(180deg, var(--card-top) 0%, var(--card-bot) 42%);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    .cc { display: flex; flex-direction: column; align-items: center; }
+    .cc-label { font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+    .cc-pill { display: inline-flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px; border-radius: 999px; background: rgba(10, 8, 20, 0.6); border: 1px solid var(--card-line); }
+    [data-theme="light"] .cc-pill { background: #fff; }
+    .cc-pill svg { width: 24px; height: 24px; color: var(--ink); }
+    .cc-name { font-size: 19px; font-weight: 600; }
+    .change { font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: rgba(192, 139, 255, 0.25); border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; text-decoration: none; }
+    .connector { display: flex; flex-direction: column; align-items: center; margin: 6px 0 14px; color: var(--accent); }
+    .connector i { width: 2px; height: 14px; background: linear-gradient(var(--accent), transparent); opacity: 0.7; }
+    .connector span { font-size: 13px; font-weight: 600; color: var(--ink); background: rgba(192, 139, 255, 0.22); padding: 3px 10px; border-radius: 999px; margin: 3px 0; }
+    .connector svg { width: 14px; height: 14px; }
+
+    h2 { font-size: 16px; font-weight: 600; margin: 0; }
+    .sec { margin-top: 28px; }
+    .sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .hint { color: var(--muted); font-size: 14px; margin: 6px 0 0; line-height: 1.45; }
+    .opt { color: var(--faint); font-weight: 400; }
+    .count { color: var(--muted); font-size: 14px; }
+
+    .uni-box { margin-top: 14px; border: 1px solid var(--field-line); border-radius: 14px; background: var(--panel); padding: 14px 16px 16px; display: grid; grid-template-columns: 32px 1fr 1fr; gap: 8px 16px; align-items: center; }
+    .badge { grid-row: 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600; background: rgba(192, 139, 255, 0.2); }
+    .uni-box label { font-weight: 600; font-size: 14px; }
+    .uni-box .hint { margin: 0; }
+
+    .field { position: relative; display: flex; align-items: center; height: 52px; border: 1px solid var(--field-line); border-radius: 10px; background: var(--field); }
+    .field svg.lead { position: absolute; left: 14px; width: 22px; height: 22px; color: var(--muted); pointer-events: none; }
+    .field select, .field input {
+      width: 100%; height: 100%; border: 0; background: transparent; color: var(--ink);
+      font: inherit; font-size: 18px; padding: 0 40px 0 46px; outline: none; appearance: none;
+    }
+    .field.plain input, .field.plain select { padding-left: 16px; }
+    .field select option { color: #111; }
+    .field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(192, 139, 255, 0.25); }
+    .field select:disabled { color: var(--faint); cursor: not-allowed; }
+    .field .chev { position: absolute; right: 14px; width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
+    select:invalid { color: var(--muted); }
+
+    .row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+    .btn { font: inherit; font-size: 16px; font-weight: 500; color: var(--muted); height: 52px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--field-line); background: var(--panel); cursor: pointer; white-space: nowrap; }
+    .btn:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 999px; background: rgba(192, 139, 255, 0.18); font-size: 14px; }
+    .chip button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 999px; }
+
+    .seg { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); padding: 5px; gap: 5px; border-radius: 12px; border: 1px solid var(--field-line); background: var(--panel); }
+    .seg button { font: inherit; color: var(--ink); background: transparent; border: 0; border-radius: 8px; padding: 10px 8px; cursor: pointer; }
+    .seg button strong { display: block; font-size: 17px; font-weight: 600; }
+    .seg button small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .seg button[aria-pressed="true"] { background: var(--seg-on); }
+
+    .toggle-row { margin-top: 14px; display: flex; align-items: center; gap: 12px; min-height: 62px; padding: 8px 14px; border: 1px solid var(--field-line); border-radius: 10px; background: var(--field); }
+    .toggle-row svg { width: 20px; height: 20px; color: var(--accent); flex: none; }
+    .toggle-row .t-text { flex: 1; }
+    .toggle-row strong { display: block; font-weight: 600; font-size: 17px; }
+    .toggle-row small { color: var(--muted); font-size: 14px; }
+    .switch { width: 48px; height: 28px; border-radius: 999px; border: 0; background: #4a4458; position: relative; cursor: pointer; flex: none; }
+    .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform 0.18s; }
+    .switch[aria-checked="true"] { background: linear-gradient(90deg, var(--brand-a), var(--brand-b)); }
+    .switch[aria-checked="true"]::after { transform: translateX(20px); }
+
+    @media (max-width: 760px) {
+      .card { padding: 24px 16px 28px; }
+      .two { grid-template-columns: 1fr; gap: 0; }
+      .uni-box { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+      .uni-box .badge, .uni-box .sp { display: none; }
+      .uni-box .l-u { order: 1; } .uni-box .f-u { order: 2; } .uni-box .h-u { order: 3; margin-bottom: 8px; }
+      .uni-box .l-m { order: 4; } .uni-box .f-m { order: 5; } .uni-box .h-m { order: 6; }
+      .row { flex-wrap: wrap; }
+      .row > .field:first-child { flex: 1 1 100% !important; }
+      #add-uni-hint { flex-basis: 100%; }
+      .seg { grid-template-columns: 1fr; }
+      .sec-head { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
-  <main>
-    <p class="eyebrow">Arrived · Platform 1</p>
-    <h1>Build your transfer plan</h1>
-    <p class="lede">This page stands in for the planner. Replace it by setting <code>data-next</code> in <code>index.html</code>.</p>
+  <header class="topbar arrive">
+    <div class="topbar-in">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M6 19c3-1 4-4 2-6s-1-6 3-6 6 2 6 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="17" cy="8.5" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="19" r="2.2" fill="currentColor"/></svg>
+      </span>
+      <span class="wordmark">SEPath</span>
+      <button type="button" class="theme-btn" id="theme" aria-label="Switch to light theme">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="#ffd21f"/><g stroke="#ffd21f" stroke-width="2" stroke-linecap="round"><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></g></svg>
+      </button>
+    </div>
+  </header>
 
-    <section class="card" aria-labelledby="cc-h">
-      <h2 id="cc-h">Community college</h2>
-      <div class="row"><span class="chip" id="college">—</span></div>
-    </section>
+  <main class="arrive">
+    <form class="card" id="plan" onsubmit="return false">
+      <div class="cc">
+        <div class="cc-label">Community college</div>
+        <div class="cc-pill">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 21v-6h8v6M8 11h.01M12 11h.01M16 11h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="cc-name" id="cc-name">Your college</span>
+          <a class="change" href="index.html">Change</a>
+        </div>
+        <div class="connector" aria-hidden="true">
+          <i></i><span>transferring to</span><svg viewBox="0 0 16 16"><path d="M8 1v12M3 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+      </div>
 
-    <section class="card" aria-labelledby="uni-h">
-      <h2 id="uni-h">Transferring to</h2>
-      <div class="row"><span class="chip" id="target">Not chosen yet</span></div>
-    </section>
+      <section class="sec" aria-labelledby="uni-h" style="margin-top:4px">
+        <div class="sec-head"><h2 id="uni-h">Universities and majors</h2><span class="count" id="uni-count">1 university</span></div>
+        <p class="hint">Pick a university, then one of its own majors. Applying to several schools? Add each one: one plan covers them all, with a tab per school.</p>
+        <div id="unis"></div>
+        <div class="row">
+          <button type="button" class="btn" id="add-uni" disabled>+ Add another university</button>
+          <span class="hint" style="margin:0" id="add-uni-hint">Pick university 1 and its major first.</span>
+        </div>
+      </section>
 
-    <p class="muted"><a href="index.html">Ride again</a></p>
+      <div class="two">
+        <section class="sec" aria-labelledby="courses-h">
+          <h2 id="courses-h">Completed courses</h2>
+          <div class="row">
+            <div class="field plain" style="flex:1"><input id="course" placeholder="Search a subject, code or title, e.g. compu, MTH 1" aria-label="Search a completed course"></div>
+            <button type="button" class="btn" id="add-course">+ Add</button>
+          </div>
+          <p class="hint">Search and select a course, then click Add · ↑ ↓ browse · Enter select · Esc close</p>
+          <div class="chips" id="course-chips"></div>
+        </section>
+
+        <section class="sec" aria-labelledby="ap-h">
+          <h2 id="ap-h">AP scores</h2>
+          <div class="row">
+            <div class="field plain" style="flex:1">
+              <select id="ap-subject" required aria-label="AP subject"><option value="" disabled selected hidden>Select AP subject...</option></select>
+              <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            </div>
+            <div class="field plain" style="width:114px">
+              <select id="ap-score" required aria-label="AP score"><option value="" disabled selected hidden>Score</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
+              <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            </div>
+            <button type="button" class="btn" id="add-ap">+ Add</button>
+          </div>
+          <p class="hint">Your college's AP chart decides course and GE credit · Adding a subject again updates its score</p>
+          <div class="chips" id="ap-chips"></div>
+        </section>
+      </div>
+
+      <section class="sec" aria-labelledby="path-h">
+        <h2 id="path-h">Transfer pathway</h2>
+        <div class="seg" role="group" aria-labelledby="path-h" id="pathway">
+          <button type="button" aria-pressed="true"><strong>CAL-GETC</strong><small>UC + CSU · 34 units</small></button>
+          <button type="button" aria-pressed="false"><strong>UC 7-Course Pattern</strong><small>UC admission minimum</small></button>
+          <button type="button" aria-pressed="false"><strong>CSU Golden Four</strong><small>CSU admission minimum</small></button>
+        </div>
+        <p class="hint">GE shows up in each semester as GE rows you can open.</p>
+      </section>
+
+      <div class="two">
+        <section class="sec" aria-labelledby="ast-h">
+          <h2 id="ast-h">AS-T degree <span class="opt">(Optional)</span></h2>
+          <div class="toggle-row">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 13.5 8 21l4-2 4 2-1-7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            <div class="t-text"><strong>Include AS-T degree</strong><small>Associate in Science for Transfer · with your major and GE</small></div>
+            <button type="button" class="switch" role="switch" aria-checked="false" aria-labelledby="ast-h" id="ast"></button>
+          </div>
+          <p class="hint" id="ast-hint">AS-T programs · CSU transfer degrees</p>
+        </section>
+
+        <section class="sec" aria-labelledby="tag-h">
+          <h2 id="tag-h">TAG University <span class="opt">(Optional)</span></h2>
+          <div class="field" style="margin-top:14px">
+            <svg class="lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-3 4 4 3-3h4M7 12l3 3M14 13l-2 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <select id="tag" aria-labelledby="tag-h"><option>None</option><option>UC Davis</option><option>UC Irvine</option><option>UC Merced</option><option>UC Riverside</option><option>UC Santa Barbara</option><option>UC Santa Cruz</option></select>
+            <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </div>
+          <p class="hint">Transfer Admission Guarantee · 6 participating UCs</p>
+        </section>
+      </div>
+
+      <div class="two">
+        <section class="sec" aria-labelledby="start-h">
+          <h2 id="start-h">Starting semester</h2>
+          <div class="field plain" style="margin-top:14px">
+            <select id="start-sem" aria-labelledby="start-h"></select>
+            <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </div>
+        </section>
+        <section class="sec" aria-labelledby="end-h">
+          <h2 id="end-h">Ending semester</h2>
+          <div class="field plain" style="margin-top:14px">
+            <select id="end-sem" aria-labelledby="end-h"></select>
+            <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </div>
+        </section>
+      </div>
+    </form>
   </main>
+
   <script>
     (() => {
+      const $ = (id) => document.getElementById(id);
+      const UNIVERSITIES = {
+        "University of California": ["UC Berkeley", "UC Davis", "UC Irvine", "UCLA", "UC Merced", "UC Riverside", "UC San Diego", "UC Santa Barbara", "UC Santa Cruz"],
+        "California State University": ["Cal State East Bay", "San José State", "San Francisco State", "Sacramento State", "Cal Poly San Luis Obispo", "Cal Poly Pomona", "CSU Long Beach", "CSU Fullerton", "San Diego State"],
+      };
+      const MAJORS = ["Computer Science", "Computer Engineering", "Biochemistry", "Biology", "Psychology", "Economics", "Business Administration", "Mechanical Engineering", "Nursing", "English"];
+      const AP = ["Biology", "Calculus AB", "Calculus BC", "Chemistry", "Computer Science A", "Computer Science Principles", "English Language", "English Literature", "Environmental Science", "Macroeconomics", "Microeconomics", "Physics 1", "Physics C: Mechanics", "Psychology", "Statistics", "US History", "World History"];
+
+      // community college from the journey (URL first, then sessionStorage)
       const q = new URLSearchParams(location.search);
       let saved = {};
-      try { saved = JSON.parse(sessionStorage.getItem("sepath.journey") || "{}"); } catch (e) { /* ignore */ }
+      try { saved = JSON.parse(sessionStorage.getItem("sepath.journey") || "{}"); } catch (e) { /* storage blocked */ }
       const college = q.get("college") || saved.college;
-      const target = q.get("target") || saved.target;
-      if (college) document.getElementById("college").textContent = college;
-      if (target) document.getElementById("target").textContent = target;
+      if (college) {
+        $("cc-name").textContent = college;
+        $("ast-hint").textContent = `${college} AS-T programs · CSU transfer degrees`;
+      }
+
+      // universities + majors
+      const opt = (v, label = v) => { const o = document.createElement("option"); o.value = v; o.textContent = label; return o; };
+      const chev = '<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+      let uniCount = 0;
+      function addUni() {
+        uniCount++;
+        const n = uniCount;
+        const box = document.createElement("div");
+        box.className = "uni-box";
+        box.innerHTML = `
+          <span class="sp"></span><label class="l-u" for="uni-${n}">University ${n}</label><label class="l-m" for="major-${n}">Major at this university</label>
+          <span class="badge">${n}</span>
+          <div class="field f-u">
+            <svg class="lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M4 10h16M12 3 3 8h18zM6 10v8M10 10v8M14 10v8M18 10v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            <select id="uni-${n}" required></select>${chev}
+          </div>
+          <div class="field f-m">
+            <svg class="lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            <select id="major-${n}" required disabled></select>${chev}
+          </div>
+          <span class="sp"></span><p class="hint h-u">UC and CSU campuses</p><p class="hint h-m">Majors with transfer data appear after you pick a college and university</p>`;
+        $("unis").appendChild(box);
+        const uni = $(`uni-${n}`), major = $(`major-${n}`);
+        const ph = opt("", "Select target university..."); ph.disabled = true; ph.selected = true; ph.hidden = true; uni.appendChild(ph);
+        for (const [sys, list] of Object.entries(UNIVERSITIES)) {
+          const g = document.createElement("optgroup"); g.label = sys;
+          list.forEach((u) => g.appendChild(opt(u)));
+          uni.appendChild(g);
+        }
+        const mph = opt("", "Select intended major..."); mph.disabled = true; mph.selected = true; mph.hidden = true; major.appendChild(mph);
+        MAJORS.forEach((m) => major.appendChild(opt(m)));
+        uni.addEventListener("change", () => { major.disabled = false; refreshAddUni(); });
+        major.addEventListener("change", refreshAddUni);
+        $("uni-count").textContent = `${n} universit${n === 1 ? "y" : "ies"}`;
+        refreshAddUni();
+      }
+      function refreshAddUni() {
+        const last = uniCount;
+        const done = $(`uni-${last}`).value && $(`major-${last}`).value;
+        $("add-uni").disabled = !done;
+        $("add-uni-hint").textContent = done ? "" : `Pick university ${last} and its major first.`;
+      }
+      $("add-uni").addEventListener("click", addUni);
+      addUni();
+
+      // chips
+      function chip(container, text, key) {
+        const existing = [...container.children].find((c) => c.dataset.key === key);
+        if (existing) existing.remove();
+        const c = document.createElement("span");
+        c.className = "chip"; c.dataset.key = key;
+        c.innerHTML = `<span></span><button type="button" aria-label="Remove">×</button>`;
+        c.firstChild.textContent = text;
+        c.lastChild.addEventListener("click", () => c.remove());
+        container.appendChild(c);
+      }
+      function addCourse() {
+        const v = $("course").value.trim();
+        if (!v) return $("course").focus();
+        chip($("course-chips"), v, v.toLowerCase());
+        $("course").value = "";
+      }
+      $("add-course").addEventListener("click", addCourse);
+      $("course").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addCourse(); } });
+
+      AP.forEach((a) => $("ap-subject").appendChild(opt(a)));
+      $("add-ap").addEventListener("click", () => {
+        const s = $("ap-subject").value, sc = $("ap-score").value;
+        if (!s) return $("ap-subject").focus();
+        if (!sc) return $("ap-score").focus();
+        chip($("ap-chips"), `${s} · ${sc}`, s);   // adding a subject again updates its score
+      });
+
+      // pathway
+      $("pathway").querySelectorAll("button").forEach((b, _, all) => b.addEventListener("click", () => all.forEach((x) => x.setAttribute("aria-pressed", String(x === b)))));
+
+      // AS-T switch
+      $("ast").addEventListener("click", (e) => e.currentTarget.setAttribute("aria-checked", String(e.currentTarget.getAttribute("aria-checked") !== "true")));
+
+      // semesters: spring/summer/fall terms from the current one through the next few years
+      const now = new Date();
+      const terms = [];
+      for (let y = now.getFullYear(); y <= now.getFullYear() + 4; y++) for (const t of ["Spring", "Summer", "Fall"]) terms.push(`${t} ${y}`);
+      const firstIdx = now.getMonth() < 5 ? 0 : now.getMonth() < 7 ? 1 : 2;
+      terms.slice(firstIdx).forEach((t) => { $("start-sem").appendChild(opt(t)); $("end-sem").appendChild(opt(t)); });
+      $("end-sem").selectedIndex = Math.min(5, $("end-sem").options.length - 1);
+
+      // theme toggle (dark is the default)
+      $("theme").addEventListener("click", () => {
+        const root = document.documentElement;
+        const light = root.dataset.theme !== "light";
+        root.dataset.theme = light ? "light" : "dark";
+        $("theme").setAttribute("aria-label", light ? "Switch to dark theme" : "Switch to light theme");
+      });
     })();
   </script>
 </body>
