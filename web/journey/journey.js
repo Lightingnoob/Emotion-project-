@@ -471,7 +471,8 @@
       return;
     }
     fitText($("t-from"), 29, 16);
-    const signText = target || "University";
+    // the train keeps the photo's own destination sign ("普通 Target college"); pass a string here to repaint it
+    const signText = null;
     closedImg = withSign(A.closed, signText);
     openImg = withSign(A.open, signText);
     stripImg = withSign(A.strip, signText, SEG_X0, STRIP_TOP);
