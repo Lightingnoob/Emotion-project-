@@ -120,12 +120,12 @@
     const now = new Date();
     const y = now.getFullYear(), m = String(now.getMonth() + 1).padStart(2, "0"), d = String(now.getDate()).padStart(2, "0");
     $("t-from").textContent = college;
-    $("t-to").textContent = target || "?";
+    $("t-to").textContent = "?";            // the destination stays open on the ticket
     $("t-city").textContent = COLLEGES[college] || "";
     $("t-valid").textContent = `${y}年${m}月${d}日から2日間有効`;
     $("t-date").innerHTML = `${y}.${m}.${d}<br>60023-01`;
     $("t-no").textContent = "No. " + String(10000 + Math.floor(Math.random() * 89999));
-    ticket.setAttribute("aria-label", `Train ticket from ${college} to ${target || "your university"}`);
+    ticket.setAttribute("aria-label", `Train ticket from ${college}, destination open`);
     ticket.classList.remove("punched");
   }
 
@@ -471,7 +471,6 @@
       return;
     }
     fitText($("t-from"), 29, 16);
-    fitText($("t-to"), 28, 15);
     const signText = target || "University";
     closedImg = withSign(A.closed, signText);
     openImg = withSign(A.open, signText);
