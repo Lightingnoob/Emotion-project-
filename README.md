@@ -239,3 +239,19 @@ python3 tools/parse_catalog.py 2025-2026_catalog_pdf.txt data/catalog
 ```
 
 Note: some catalog prerequisites differ from the newer sources in `PREREQUISITE_REVIEW.md`. For example, the catalog still lists an algebra/trigonometry prerequisite for MTH 1, while the review records open access from Fall 2025.
+
+## Transfer journey animation (`web/journey/`)
+
+A standalone page: the student enters the community college they attended (and optionally where they
+want to transfer), a ticket with that college flies in, the train pulls into the station, the doors
+open, the camera zooms through the door and cuts to the switch, then moves forward along the tracks.
+
+Run it from the repo root with any static server, for example:
+
+```bash
+python3 -m http.server 8000 --directory web/journey
+# open http://localhost:8000
+```
+
+`tools/build_journey_assets.py <image_dir>` regenerates `web/journey/assets/` (station layers, train
+strip, door leaves, track photo) from the source station and track images.

@@ -1,0 +1,223 @@
+:root {
+  --ink: #1d2433;
+  --paper: #fffaf2;
+  --sunset: #ff9a4a;
+  --sunset-deep: #e2672b;
+  --navy: #1e3a6b;
+  --ticket: #dff2ef;
+  --ticket-band: #b6e3dc;
+  --ticket-ink: #233042;
+  --focus: #ffd29a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #0d0a12;
+  color: var(--paper);
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+.screen { position: fixed; inset: 0; display: none; }
+.screen.is-active { display: block; }
+
+/* ---------------------------------------------------------------- intake form */
+.intake-bg {
+  position: absolute;
+  inset: -40px;
+  background: url("assets/station_bg.webp") center / cover no-repeat;
+  filter: blur(10px) brightness(0.55) saturate(1.1);
+  transform: scale(1.04);
+}
+
+.intake-card {
+  position: relative;
+  width: min(460px, calc(100% - 32px));
+  margin: 0 auto;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 32px 28px 28px;
+  background: rgba(22, 18, 30, 0.72);
+  border: 1px solid rgba(255, 210, 160, 0.25);
+  border-radius: 18px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sunset);
+}
+
+.intake-card h1 {
+  margin: 0 0 8px;
+  font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+  font-size: clamp(24px, 4.5vw, 32px);
+  line-height: 1.2;
+}
+
+.lede { margin: 0 0 22px; color: #e8dccd; line-height: 1.5; }
+
+.intake-card label { display: block; margin: 14px 0 6px; font-weight: 500; font-size: 15px; }
+.optional { color: #b9ab9b; font-weight: 400; }
+
+.intake-card input {
+  width: 100%;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid transparent;
+  border-radius: 10px;
+}
+.intake-card input:focus { outline: none; border-color: var(--sunset); box-shadow: 0 0 0 3px rgba(255, 154, 74, 0.3); }
+.intake-card input[aria-invalid="true"] { border-color: #ff6b6b; }
+
+.field-error { margin: 6px 0 0; color: #ffb3b3; font-size: 14px; }
+
+.board-btn, .ghost-btn {
+  font: inherit;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 12px 22px;
+  cursor: pointer;
+  border: 0;
+}
+.board-btn { background: linear-gradient(135deg, var(--sunset), var(--sunset-deep)); color: #1b0f05; }
+.ghost-btn { background: rgba(255, 255, 255, 0.12); color: var(--paper); border: 1px solid rgba(255, 255, 255, 0.35); }
+.board-btn:focus-visible, .ghost-btn:focus-visible, .skip-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.intake-card .board-btn { margin-top: 24px; width: 100%; font-size: 17px; }
+
+/* ---------------------------------------------------------------- journey stage */
+#viewport { position: absolute; inset: 0; overflow: hidden; background: #000; }
+
+/* the station is authored in the 1448x1086 space of the photos and scaled to cover the screen */
+#zoomer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1448px;
+  height: 1086px;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+#station { position: absolute; inset: 0; width: 1448px; height: 1086px; }
+
+#tracks { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+
+#flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 55%, #fff6e0 0%, #ffd08a 45%, #ff9a4a 100%);
+  opacity: 0;
+}
+
+.skip-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--paper);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+#caption::before {
+  content: "";
+  position: absolute;
+  inset: -40px -60px;
+  z-index: -1;
+  background: radial-gradient(ellipse at center, rgba(10, 6, 14, 0.62) 0%, rgba(10, 6, 14, 0.35) 55%, transparent 75%);
+}
+#caption {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  width: min(620px, calc(100% - 32px));
+  text-align: center;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+  animation: rise 1.2s ease-out both;
+}
+#caption[hidden] { display: none; }
+.cap-eyebrow { margin: 0; letter-spacing: 0.16em; text-transform: uppercase; color: var(--focus); font-size: 13px; }
+#caption h2 { margin: 6px 0 8px; font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif; font-size: clamp(26px, 5vw, 44px); }
+#caption p { margin: 0; font-size: clamp(15px, 2.2vw, 18px); color: #fbead6; }
+.cap-actions { display: flex; gap: 12px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ---------------------------------------------------------------- ticket (stage px; scales with the station) */
+.ticket {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 470px;
+  height: 330px;
+  padding: 22px 26px 0;
+  color: var(--ticket-ink);
+  font-family: "Noto Sans JP", sans-serif;
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.18) 0 2px, transparent 2px 7px),
+    radial-gradient(circle at 30% 20%, #ecfaf7 0%, var(--ticket) 60%, #cfe9e4 100%);
+  border-radius: 6px;
+  box-shadow: 0 18px 40px rgba(20, 10, 0, 0.45), 0 2px 0 rgba(255, 255, 255, 0.6) inset;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+  opacity: 0;
+  overflow: hidden;
+}
+.t-head { display: flex; align-items: center; gap: 14px; font-size: 15px; }
+.t-logo { color: #2f6f73; display: inline-flex; }
+.t-kind { letter-spacing: 0.25em; border-bottom: 2px solid var(--ticket-ink); padding: 0 6px 2px; margin-left: 40px; }
+.t-no { margin-left: auto; font-size: 15px; }
+.t-route { display: flex; align-items: center; gap: 14px; margin-top: 26px; height: 40px; }
+.t-from { font-size: 29px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; flex: 0 1 auto; max-width: 250px; overflow: hidden; text-overflow: ellipsis; }
+.t-arrow { font-size: 26px; }
+.t-to { font-size: 28px; font-weight: 500; white-space: nowrap; flex: 0 1 auto; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.t-city { margin: 2px 0 0 52px; font-size: 16px; letter-spacing: 0.08em; min-height: 22px; }
+.t-sub { margin-top: 8px; font-size: 16px; }
+.t-valid { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; font-size: 17px; }
+.t-sem { font-size: 18px; }
+.t-band { position: absolute; left: 0; right: 0; top: 232px; height: 28px; background: var(--ticket-band); }
+.t-foot {
+  position: absolute;
+  left: 50px;
+  right: 30px;
+  bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.t-code { font-size: 16px; }
+.t-punch {
+  position: absolute;
+  right: 92px;
+  top: -14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0d0a12;
+  transform: scale(0);
+  transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.ticket.punched .t-punch { transform: scale(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  #caption { animation: none; }
+}
