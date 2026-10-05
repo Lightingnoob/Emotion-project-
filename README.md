@@ -244,7 +244,8 @@ Note: some catalog prerequisites differ from the newer sources in `PREREQUISITE_
 
 A standalone page: the student enters the community college they attended (and optionally where they
 want to transfer), a ticket with that college flies in, the train pulls into the station, the doors
-open, the camera zooms through the door and cuts to the switch, then moves forward along the tracks.
+open, the camera zooms through the door and cuts to the switch, takes one branch (set `ROUTE` in
+`journey.js`: -1 left, +1 right) and rides it forward while the scene fades out.
 
 Run it from the repo root with any static server, for example:
 

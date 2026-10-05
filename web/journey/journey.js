@@ -48,11 +48,15 @@
     ticketToDoor: [8.9, 10.2],
     zoom: [9.6, 12.0],
     flashIn: [11.2, 12.0],
-    ride: [12.0, 20.5],
+    ride: [12.0, 25.0],
     flashOut: [12.0, 12.9],
-    caption: 19.2,
+    steer: [14.6, 20.2],
+    fadeOut: [20.8, 25.4],
+    caption: 24.6,
   };
-  const END = T.ride[1] + 0.2;
+  const END = T.fadeOut[1] + 0.2;
+  // which branch the switch sends us down: -1 = left (toward the sea), +1 = right (along the platform)
+  const ROUTE = -1;
 
   // station geometry (pixels in the 1448x1086 photo space)
   const STAGE_W = 1448, STAGE_H = 1086;
@@ -310,7 +314,7 @@
     precision highp float;
     uniform sampler2D uTex;
     uniform vec2 uRes, uImg, uVP;
-    uniform float uT, uBlur, uFloorK, uWallK, uWarm;
+    uniform float uT, uBlur, uFloorK, uWallK, uWarm, uLat, uPan, uFade, uZoom;
     // inverse depth: ground plane below the horizon, the platform/station wall on the right
     float depthAt(vec2 p) {
       float iF = max(p.y - uVP.y, 0.0) / uFloorK;
@@ -321,17 +325,23 @@
       vec2 frag = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
       float sc = max(uRes.x / uImg.x, uRes.y / uImg.y);
       vec2 p = (frag - uRes * 0.5) / sc + uImg * 0.5;
+      p = uImg * 0.5 + (p - uImg * 0.5) / uZoom;   // slight zoom-in keeps the frame edges inside the photo
+      p.x += uPan;                                   // camera yaw while following the branch
       float z = depthAt(p);
       vec3 acc = vec3(0.0);
       for (int i = 0; i < 12; i++) {
         float tt = max(uT - uBlur * float(i) / 11.0, 0.0);
-        vec2 src = uVP + (p - uVP) * (z / (z + tt));
+        // forward travel tt plus a sideways move uLat: near ground shifts a lot, the horizon barely moves
+        vec2 src = uVP + vec2((p.x - uVP.x) * z + uLat, (p.y - uVP.y) * z) / (z + tt);
         acc += texture2D(uTex, clamp(src / uImg, 0.0, 1.0)).rgb;
       }
       vec3 col = acc / 12.0;
       vec2 q = frag / uRes - 0.5;
       col *= mix(0.72, 1.0, smoothstep(0.85, 0.25, length(q * vec2(1.1, 1.0))));
       col = mix(col, col * vec3(1.06, 0.98, 0.9), uWarm);
+      float lum = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(col, vec3(lum) * vec3(1.0, 0.85, 0.75), uFade * 0.6);
+      col = mix(col, vec3(0.025, 0.02, 0.035), smoothstep(0.0, 1.0, uFade));
       gl_FragColor = vec4(col, 1.0);
     }`;
 
@@ -363,7 +373,7 @@
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, A.tracks);
-    for (const n of ["uRes", "uImg", "uVP", "uT", "uBlur", "uFloorK", "uWallK", "uWarm"]) glUniforms[n] = gl.getUniformLocation(glProg, n);
+    for (const n of ["uRes", "uImg", "uVP", "uT", "uBlur", "uFloorK", "uWallK", "uWarm", "uLat", "uPan", "uFade", "uZoom"]) glUniforms[n] = gl.getUniformLocation(glProg, n);
     gl.uniform2f(glUniforms.uImg, TRACK_IMG.w, TRACK_IMG.h);
     gl.uniform2f(glUniforms.uVP, TRACK_VP.x, TRACK_VP.y);
     gl.uniform1f(glUniforms.uFloorK, 250.0);
@@ -373,8 +383,15 @@
 
   function rideTravel(t) {
     const u = prog(t, T.ride);
-    const maxT = reduceMotion ? 0.1 : 0.6;
-    return maxT * easeInOutSine(u);
+    const maxT = reduceMotion ? 0.1 : 1.1;
+    // ease in, then keep rolling at a steady pace to the end (no stop)
+    return maxT * (u < 0.25 ? 2 * u * u : u - 0.125) / 0.875;
+  }
+
+  // sideways drift onto the chosen branch and a slight turn to follow it
+  function rideSteer(t) {
+    const p = reduceMotion ? 0 : easeInOutSine(prog(t, T.steer));
+    return { lat: ROUTE * 320 * p, pan: ROUTE * 30 * p, zoom: 1 + 0.28 * p };
   }
 
   function drawTracks(t) {
@@ -389,6 +406,11 @@
     gl.uniform1f(glUniforms.uT, travel);
     gl.uniform1f(glUniforms.uBlur, reduceMotion ? 0 : clamp(speed * 0.15, 0, 0.03));
     gl.uniform1f(glUniforms.uWarm, 0.4);
+    const steer = rideSteer(t);
+    gl.uniform1f(glUniforms.uLat, steer.lat);
+    gl.uniform1f(glUniforms.uPan, steer.pan);
+    gl.uniform1f(glUniforms.uZoom, steer.zoom);
+    gl.uniform1f(glUniforms.uFade, prog(t, T.fadeOut));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -474,7 +496,7 @@
   });
 
   $("replay").addEventListener("click", () => play(0));
-  $("skip").addEventListener("click", () => play(T.ride[1]));
+  $("skip").addEventListener("click", () => play(T.caption));
   $("restart").addEventListener("click", () => {
     cancelAnimationFrame(rafId);
     journey.classList.remove("is-active");
