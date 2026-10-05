@@ -52,9 +52,8 @@
     flashOut: [12.0, 12.9],
     steer: [14.6, 20.2],
     fadeOut: [20.8, 25.4],
-    caption: 24.6,
   };
-  const END = T.fadeOut[1] + 0.2;
+  const END = T.fadeOut[1] + 0.35;            // hold on black briefly, then hand off to the next page
   // which branch the switch sends us down: -1 = left (toward the sea), +1 = right (along the platform)
   const ROUTE = -1;
 
@@ -111,7 +110,7 @@
   const intake = $("intake"), journey = $("journey");
   const form = $("intake-form"), collegeInput = $("college"), targetInput = $("target"), collegeError = $("college-error");
   const zoomer = $("zoomer"), stationCanvas = $("station"), sctx = stationCanvas.getContext("2d");
-  const ticket = $("ticket"), flash = $("flash"), caption = $("caption"), tracksCanvas = $("tracks");
+  const ticket = $("ticket"), flash = $("flash"), tracksCanvas = $("tracks");
 
   $("cc-list").innerHTML = Object.keys(COLLEGES).map((c) => `<option value="${c}"></option>`).join("");
   $("uni-list").innerHTML = UNIVERSITIES.map((u) => `<option value="${u}"></option>`).join("");
@@ -415,7 +414,7 @@
   }
 
   // ------------------------------------------------------------------ main loop
-  let startTime = 0, rafId = 0, state = null, captionShown = false;
+  let startTime = 0, rafId = 0, state = null, handedOff = false;
 
   function frame(now) {
     const t = (now - startTime) / 1000;
@@ -434,24 +433,26 @@
     } else {
       tracksCanvas.style.opacity = 0;
     }
-    if (t >= T.caption && !captionShown) showCaption();
     if (t < END) rafId = requestAnimationFrame(frame);
+    else goToNextPage();
   }
 
-  function showCaption() {
-    captionShown = true;
-    $("cap-title").textContent = `Next stop: ${state.target || "your university"}`;
-    $("cap-sub").textContent = `Departing ${state.college}. The switch ahead is yours to choose.`;
-    caption.hidden = false;
-    $("skip").hidden = true;
-    $("replay").focus({ preventScroll: true });
+  // After the fade to black, continue to the next page (set data-next on <body>), passing what the
+  // student entered both in the URL and in sessionStorage.
+  function goToNextPage() {
+    if (handedOff) return;
+    handedOff = true;
+    const next = new URL(document.body.dataset.next || "plan.html", window.location.href);
+    if (next.origin !== window.location.origin) return;     // only same-site pages
+    next.searchParams.set("college", state.college);
+    if (state.target) next.searchParams.set("target", state.target);
+    try { sessionStorage.setItem("sepath.journey", JSON.stringify(state)); } catch (e) { /* storage blocked */ }
+    window.location.assign(next.href);
   }
 
   function play(fromTime = 0) {
     cancelAnimationFrame(rafId);
-    captionShown = false;
-    caption.hidden = true;
-    $("skip").hidden = false;
+    handedOff = false;
     ticket.classList.remove("punched");
     startTime = performance.now() - fromTime * 1000;
     rafId = requestAnimationFrame(frame);
@@ -495,14 +496,8 @@
     startJourney(college, targetInput.value.trim());
   });
 
-  $("replay").addEventListener("click", () => play(0));
-  $("skip").addEventListener("click", () => play(T.caption));
-  $("restart").addEventListener("click", () => {
-    cancelAnimationFrame(rafId);
-    journey.classList.remove("is-active");
-    intake.classList.add("is-active");
-    collegeInput.focus();
-  });
+  // skipping still ends with the short fade so the hand-off never jumps
+  $("skip").addEventListener("click", () => play(Math.max(T.fadeOut[1] - 1.0, 0)));
   window.addEventListener("resize", () => {
     if (!journey.classList.contains("is-active") || !A) return;
     const t = (performance.now() - startTime) / 1000;
@@ -510,5 +505,5 @@
   });
 
   // expose for automated checks: render a specific moment without waiting
-  window.__journey = { T, seek: (t) => play(t) };
+  window.__journey = { T, END, seek: (t) => play(t), hold: () => { handedOff = true; } };
 })();

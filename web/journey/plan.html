@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transfer Plan</title>
+  <!-- Stand-in for the real planner page: the journey hands off here after its fade to black.
+       Point <body data-next> in index.html at the real page; it receives ?college=&target=. -->
+  <style>
+    :root { --bg: #07060b; --card: rgba(30, 22, 44, 0.78); --line: rgba(255, 255, 255, 0.12); --ink: #f3eefb; --muted: #b7accb; --accent: #ff9a4a; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 50% -10%, rgba(255, 130, 60, 0.28), transparent 60%),
+        radial-gradient(ellipse at 50% 120%, rgba(60, 40, 110, 0.5), transparent 60%),
+        var(--bg);
+    }
+    /* arrive from black, matching the end of the ride */
+    main { width: min(760px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 40px; opacity: 0; transform: translateY(10px); animation: arrive 1.4s 0.15s ease-out forwards; }
+    @keyframes arrive { to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { main { animation-duration: 0.01s; } }
+    .eyebrow { margin: 0; text-align: center; letter-spacing: 0.14em; text-transform: uppercase; font-size: 13px; color: var(--accent); }
+    h1 { margin: 6px 0 4px; text-align: center; font-size: clamp(26px, 5vw, 38px); }
+    .lede { margin: 0 0 28px; text-align: center; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: rgba(255, 154, 74, 0.14); border: 1px solid rgba(255, 154, 74, 0.45); font-weight: 600; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .muted { color: var(--muted); font-size: 14px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Arrived · Platform 1</p>
+    <h1>Build your transfer plan</h1>
+    <p class="lede">This page stands in for the planner. Replace it by setting <code>data-next</code> in <code>index.html</code>.</p>
+
+    <section class="card" aria-labelledby="cc-h">
+      <h2 id="cc-h">Community college</h2>
+      <div class="row"><span class="chip" id="college">—</span></div>
+    </section>
+
+    <section class="card" aria-labelledby="uni-h">
+      <h2 id="uni-h">Transferring to</h2>
+      <div class="row"><span class="chip" id="target">Not chosen yet</span></div>
+    </section>
+
+    <p class="muted"><a href="index.html">Ride again</a></p>
+  </main>
+  <script>
+    (() => {
+      const q = new URLSearchParams(location.search);
+      let saved = {};
+      try { saved = JSON.parse(sessionStorage.getItem("sepath.journey") || "{}"); } catch (e) { /* ignore */ }
+      const college = q.get("college") || saved.college;
+      const target = q.get("target") || saved.target;
+      if (college) document.getElementById("college").textContent = college;
+      if (target) document.getElementById("target").textContent = target;
+    })();
+  </script>
+</body>
+</html>

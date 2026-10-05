@@ -9,7 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="journey.css">
 </head>
-<body>
+<!-- data-next: the page to open after the ride fades out (receives ?college=&target=) -->
+<body data-next="plan.html">
   <!-- Step 1: where the student is starting from -->
   <section id="intake" class="screen is-active" aria-labelledby="intake-title">
     <div class="intake-bg" aria-hidden="true"></div>
@@ -63,15 +64,6 @@
       </div>
       <canvas id="tracks" aria-hidden="true"></canvas>
       <div id="flash" aria-hidden="true"></div>
-      <div id="caption" hidden>
-        <p class="cap-eyebrow">Now departing</p>
-        <h2 id="cap-title">Next stop: your university</h2>
-        <p id="cap-sub"></p>
-        <div class="cap-actions">
-          <button type="button" id="replay" class="ghost-btn">Replay</button>
-          <button type="button" id="restart" class="board-btn">Start over</button>
-        </div>
-      </div>
       <button type="button" id="skip" class="skip-btn">Skip ▸▸</button>
     </div>
   </section>
